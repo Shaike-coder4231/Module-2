@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прототип сервиса бронирования</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --border: #e2e8f0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background: var(--bg); color: var(--text); line-height: 1.5; }
+        
+        header, footer { background: #0f172a; color: white; padding: 1.5rem 2rem; text-align: center; }
+        header h1 { font-size: 1.8rem; } header p { color: #94a3b8; margin-top: 0.3rem; }
+        footer { display: flex; flex-wrap: wrap; justify-content: space-around; padding: 2rem; gap: 1rem; }
+        footer div { min-width: 200px; }
+
+        main { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        
+        .filters { background: var(--card); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; }
+        .filters select, .filters button { padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
+        .filters button { cursor: pointer; font-weight: 500; }
+        .btn-apply { background: var(--primary); color: white; border: none; }
+        .btn-reset { background: #ef4444; color: white; border: none; }
+
+        .rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+        .room-card { background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .room-card:hover { transform: translateY(-4px); }
+        
+        /* Стили для локальных изображений */
+        .room-img { width: 100%; height: 180px; object-fit: cover; display: block; background: #cbd5e1; }
+        
+        .room-info { padding: 1rem; }
+        .room-category { background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; display: inline-block; margin-bottom: 0.5rem; }
+        .room-price { font-size: 1.4rem; font-weight: 700; color: var(--primary); margin: 0.5rem 0; }
+        .room-features { color: #64748b; font-size: 0.9rem; margin-bottom: 1rem; }
+        .btn-book { width: 100%; padding: 0.8rem; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+
+        .booking-form { max-width: 600px; margin: 0 auto; background: var(--card); padding: 2rem; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .booking-form h2 { margin-bottom: 1.5rem; text-align: center; }
+        .form-group { margin-bottom: 1.2rem; }
+        .form-group label { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+        .form-group input { width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; }
+        .form-group input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+        .error { color: #ef4444; font-size: 0.85rem; margin-top: 0.3rem; display: none; }
+        .btn-submit { width: 100%; padding: 0.9rem; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: 600; cursor: pointer; margin-top: 1rem; }
+        
+        .success-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center; z-index: 100; display: none; }
+        .success-modal h3 { color: #10b981; margin-bottom: 0.5rem; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; z-index: 99; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>ComfortStay</h1>
+    <p>Уют начинается с правильного выбора</p>
+</header>
+
+<main>
+    <section id="catalog-page">
+        <div class="filters">
+            <div>
+                <label>Категория номера:</label><br>
+                <select id="categoryFilter">
+                    <option value="all">Все категории</option>
+                    <option value="Эконом">Эконом</option>
+                    <option value="Стандарт">Стандарт</option>
+                    <option value="Люкс">Люкс</option>
+                </select>
+            </div>
+            <button class="btn-apply" onclick="applyFilter()">Применить</button>
+            <button class="btn-reset" onclick="resetFilter()">Сбросить фильтр</button>
+        </div>
+        <div class="rooms-grid" id="roomsContainer"></div>
+    </section>
+
+    <section id="booking-page" class="hidden">
+        <div class="booking-form">
+            <h2>Бронирование номера <span id="bookingRoomId"></span></h2>
+            <form id="bookingForm" novalidate>
+                <div class="form-group">
+                    <label>Имя *</label>
+                    <input type="text" id="firstName" placeholder="Иван Иванович">
+                    <div class="error" id="errName">Только кириллица, пробелы, точки и тире</div>
+                </div>
+                <div class="form-group">
+                    <label>Фамилия *</label>
+                    <input type="text" id="lastName" placeholder="Петров">
+                    <div class="error" id="errLastName">Только кириллица, пробелы, точки и тире</div>
+                </div>
+                <div class="form-group">
+                    <label>Телефон *</label>
+                    <input type="text" id="phone" placeholder="+7(999)123-45-67">
+                    <div class="error" id="errPhone">Формат: +7(XXX)XXX-XX-XX</div>
+                </div>
+                <div class="form-group">
+                    <label>E-mail *</label>
+                    <input type="text" id="email" placeholder="example@mail.ru">
+                    <div class="error" id="errEmail">Введите корректный email</div>
+                </div>
+                <div class="form-group">
+                    <label>Дата заезда (ДД:ММ:ГГГГ) *</label>
+                    <input type="text" id="checkIn" placeholder="25:05:2026">
+                    <div class="error" id="errDateIn">Формат: ДД:ММ:ГГГГ</div>
+                </div>
+                <div class="form-group">
+                    <label>Дата выезда (ДД:ММ:ГГГГ) *</label>
+                    <input type="text" id="checkOut" placeholder="28:05:2026">
+                    <div class="error" id="errDateOut">Формат: ДД:ММ:ГГГГ</div>
+                </div>
+                <button type="submit" class="btn-submit">Отправить заявку</button>
+            </form>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <div>📍 г. Москва, ул. Примерная, д. 10</div>
+    <div>🕒 Режим работы: Пн-Вс 08:00–22:00</div>
+    <div>📞 +7 (495) 123-45-67</div>
+    <div>✉️ info@comfortstay.ru</div>
+</footer>
+
+<div class="overlay" id="overlay"></div>
+<div class="success-modal" id="successModal">
+    <h3>✅ Заявка успешно отправлена!</h3>
+    <p>Мы свяжемся с вами в ближайшее время для подтверждения бронирования.</p>
+    <button class="btn-apply" onclick="closeModal()" style="margin-top:1rem; width:100%">Закрыть</button>
+</div>
+
+<script>
+    // 📷 УКАЖИТЕ ПУТИ К ЛОКАЛЬНЫМ ИЗОБРАЖЕНИЯМ ЗДЕСЬ
+    const rooms = [
+        { id: 101, category: "Эконом", price: 2500, features: "1 кровать, Wi-Fi, ТВ", image: "img/250718-2-1920-roo-LTMO.webp" },
+        { id: 102, category: "Стандарт", price: 4200, features: "2 кровати, кондиционер, мини-бар", image: "img/8687bfc0f0898e8e4074d44166df587c.jpg" },
+        { id: 103, category: "Люкс", price: 8500, features: "King-size, джакузи, вид на город", image: "img/249827077.jpg" },
+        { id: 104, category: "Эконом", price: 2300, features: "1 кровать, душ, Wi-Fi", image: "img/nwrj3a11uof1dd5582h2pwz23hmyp4t2.jpg" },
+        { id: 105, category: "Стандарт", price: 4500, features: "2 кровати, завтрак включён", image: "img/отель2.webp" },
+        { id: 106, category: "Люкс", price: 9000, features: "Терраса, сейф, халаты", image: "img/Horseka_Number2.jpg" },
+        { id: 107, category: "Эконом", price: 2600, features: "1 кровать, рабочий стол", image: "img/efbbd4018e0814c270aca9b8a8934258.jpg" },
+        { id: 108, category: "Стандарт", price: 4100, features: "2 кровати, фен, утюг", image: "img/8687bfc0f0898e8e4074d44166df587c.jpg" }
+    ];
+
+    let currentRooms = [];
+
+    function initCatalog() {
+        currentRooms = shuffleArray([...rooms]).slice(0, 6);
+        renderRooms(currentRooms);
+    }
+
+    function renderRooms(list) {
+        const container = document.getElementById('roomsContainer');
+        container.innerHTML = '';
+        if(list.length === 0) {
+            container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:#64748b;">Номера не найдены</p>';
+            return;
+        }
+        list.forEach(r => {
+            container.innerHTML += `
+                <div class="room-card">
+                    <img src="${r.image}" alt="Номер ${r.id}" class="room-img" 
+                         onerror="this.onerror=null; this.src='img/placeholder.jpg';">
+                    <div class="room-info">
+                        <span class="room-category">${r.category}</span>
+                        <h3>Номер ${r.id}</h3>
+                        <div class="room-price">${r.price} ₽ / ночь</div>
+                        <div class="room-features">${r.features}</div>
+                        <button class="btn-book" onclick="goToBooking(${r.id})">Забронировать</button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function shuffleArray(arr) {
+        for(let i = arr.length -1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    function applyFilter() {
+        const cat = document.getElementById('categoryFilter').value;
+        const filtered = cat === 'all' ? rooms : rooms.filter(r => r.category === cat);
+        currentRooms = shuffleArray(filtered).slice(0, 6);
+        renderRooms(currentRooms);
+    }
+
+    function resetFilter() {
+        document.getElementById('categoryFilter').value = 'all';
+        initCatalog();
+    }
+
+    function goToBooking(id) {
+        document.getElementById('catalog-page').classList.add('hidden');
+        document.getElementById('booking-page').classList.remove('hidden');
+        document.getElementById('bookingRoomId').textContent = `#${id}`;
+        window.scrollTo(0,0);
+    }
+
+    document.getElementById('bookingForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        let isValid = true;
+
+        const validate = (id, regex, errId) => {
+            const val = document.getElementById(id).value.trim();
+            const err = document.getElementById(errId);
+            if(!regex.test(val)) { err.style.display = 'block'; isValid = false; }
+            else { err.style.display = 'none'; }
+        };
+
+        validate('firstName', /^[\u0400-\u04FF\s.\-]+$/, 'errName');
+        validate('lastName', /^[\u0400-\u04FF\s.\-]+$/, 'errLastName');
+        validate('phone', /^\+7\(\d{3}\)\d{3}-\d{2}-\d{2}$/, 'errPhone');
+        validate('email', /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'errEmail');
+        validate('checkIn', /^\d{2}:\d{2}:\d{4}$/, 'errDateIn');
+        validate('checkOut', /^\d{2}:\d{2}:\d{4}$/, 'errDateOut');
+
+        if(isValid) {
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('successModal').style.display = 'block';
+        }
+    });
+
+    function closeModal() {
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('successModal').style.display = 'none';
+        document.getElementById('bookingForm').reset();
+        document.getElementById('booking-page').classList.add('hidden');
+        document.getElementById('catalog-page').classList.remove('hidden');
+        initCatalog();
+    }
+
+    initCatalog();
+</script>
+
+</body>
+</html>
